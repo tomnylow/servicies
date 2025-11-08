@@ -16,6 +16,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +34,7 @@ import com.example.servicies.ui.theme.ServiciesTheme
 
 class MainActivity : ComponentActivity() {
     private val NOTIFICATION_PERMISSION_REQUEST_CODE = 1001
+    var hasPermissionState: MutableState<Boolean>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,7 +70,10 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
-            if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+            val isGranted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            hasPermissionState?.value = isGranted
+
+            if (!isGranted) {
                 Toast.makeText(this, "Уведомления отключены", Toast.LENGTH_LONG).show()
             }
         }
@@ -93,7 +99,7 @@ fun NotificationStatusView(
     onWorkStart: () -> Unit
 ) {
     val context = LocalContext.current
-    var hasPermission by remember {
+    val hasPermission = remember {
         mutableStateOf(
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                 true
@@ -106,7 +112,15 @@ fun NotificationStatusView(
         )
     }
 
-    val statusText = if (hasPermission) {
+    // Сохраняем ссылку на состояние в активности
+    DisposableEffect(Unit) {
+        (context as? MainActivity)?.hasPermissionState = hasPermission
+        onDispose {
+            (context as? MainActivity)?.hasPermissionState = null
+        }
+    }
+
+    val statusText = if (hasPermission.value) {
         "Уведомления разрешены — готово к работе"
     } else {
         "Уведомления запрещены — не работает"
@@ -120,7 +134,7 @@ fun NotificationStatusView(
         Text(text = statusText)
         Button(
             onClick = {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasPermission) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasPermission.value) {
                     onPermissionRequest()
                 } else {
                     onWorkStart()
